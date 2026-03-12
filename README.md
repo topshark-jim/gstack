@@ -31,7 +31,7 @@ Re-run the full conversion against the latest upstream state with one command:
 ./scripts/sync-upstream.sh
 ```
 
-That command fetches `upstream/main`, regenerates `skills/*`, updates `UPSTREAM_COMMIT`, and runs validation.
+That command fetches `upstream/main`, regenerates `skills/*`, updates `UPSTREAM_COMMIT`, runs validation, and refreshes the global installed copies under `~/.agents/skills`.
 
 ## Validation
 
