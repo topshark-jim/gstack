@@ -1,6 +1,4 @@
-node_modules/
-browse/dist/
-/tmp/
-*.log
-bun.lock
-*.bun-build
+.DS_Store
+__pycache__/
+*.pyc
+.tmp/
