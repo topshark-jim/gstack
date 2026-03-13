@@ -4,20 +4,30 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+required_skills=(
+  browse
+  plan-ceo-review
+  plan-eng-review
+  retro
+  review
+  ship
+)
+
 python3 - <<'PY'
 from pathlib import Path
 
 skills = sorted(path.parent.name for path in Path("skills").glob("*/SKILL.md"))
-expected = [
+expected = {
     "browse",
     "plan-ceo-review",
     "plan-eng-review",
     "retro",
     "review",
     "ship",
-]
-if skills != expected:
-    raise SystemExit(f"expected skills {expected}, got {skills}")
+}
+
+if not expected.issubset(set(skills)):
+    raise SystemExit(f"expected at least {sorted(expected)}, got {skills}")
 PY
 
 forbidden_agent='cl''aude'
@@ -31,7 +41,7 @@ fi
 npx -y skills add "$ROOT" --list >/tmp/gstack-skills-list.txt
 cat /tmp/gstack-skills-list.txt
 
-for skill in browse plan-ceo-review plan-eng-review retro review ship; do
+for skill in "${required_skills[@]}"; do
   if ! rg -q "(^|[^[:alnum:]-])$skill($|[^[:alnum:]-])" /tmp/gstack-skills-list.txt; then
     echo "missing skill in discovery output: $skill"
     exit 1

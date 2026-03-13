@@ -1,6 +1,7 @@
 ---
 name: browse
-description: Browser automation workflow built on the `agent-browser` CLI. Use when you need to open pages, inspect content, click through flows, fill forms, capture screenshots, inspect console or network activity, or compare pages.
+description: |
+  Browser automation workflow built on the `agent-browser` CLI. Use when you need to open pages, inspect content, click through flows, fill forms, capture screenshots, inspect console or network activity, or compare pages.
 ---
 
 # browse

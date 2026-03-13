@@ -12,12 +12,18 @@ On this machine the global install path resolves to `~/.agents/skills` through t
 
 ## Included Skills
 
+All skills present in upstream `gstack` are synced automatically during conversion, with a few repository-specific adaptations (for `browse`, and path normalization).
+
+At the moment this includes:
+
 - `browse`
 - `plan-ceo-review`
 - `plan-eng-review`
-- `review`
-- `ship`
+- `qa`
 - `retro`
+- `review`
+- `setup-browser-cookies`
+- `ship`
 
 ## browse Dependency
 

@@ -7,46 +7,15 @@ import re
 import shutil
 from pathlib import Path
 
-SKILLS = [
-    "browse",
-    "plan-ceo-review",
-    "plan-eng-review",
-    "review",
-    "ship",
-    "retro",
-]
-
-DESCRIPTIONS = {
-    "browse": (
-        "Browser automation workflow built on the `agent-browser` CLI. Use when "
-        "you need to open pages, inspect content, click through flows, fill forms, "
-        "capture screenshots, inspect console or network activity, or compare pages."
-    ),
-    "plan-ceo-review": (
-        "Founder-mode plan review. Use when the user wants to pressure-test a plan, "
-        "challenge the premise, expand or reduce scope intentionally, and surface "
-        "product-level opportunities before implementation starts."
-    ),
-    "plan-eng-review": (
-        "Engineering plan review. Use when the user wants to lock in architecture, "
-        "data flow, failure modes, diagrams, testing, and implementation risks before "
-        "coding."
-    ),
-    "review": (
-        "Pre-landing PR review. Use when the user wants a structural review of a diff "
-        "against main for concurrency risks, trust-boundary bugs, data safety issues, "
-        "and missing test coverage."
-    ),
-    "ship": (
-        "Ready-branch release workflow. Use when the branch is ready to merge and the "
-        "user wants a repeatable flow for syncing main, running tests, reviewing the "
-        "diff, versioning, changelog updates, pushing, and opening a PR."
-    ),
-    "retro": (
-        "Weekly engineering retrospective. Use when the user wants commit-history, "
-        "session, hotspot, and delivery-trend analysis over the last day, week, or "
-        "custom time window."
-    ),
+SKILL_OVERRIDES = {
+    "browse": {
+        "description": (
+            "Browser automation workflow built on the `agent-browser` CLI. Use when "
+            "you need to open pages, inspect content, click through flows, fill "
+            "forms, capture screenshots, inspect console or network activity, or "
+            "compare pages."
+        ),
+    },
 }
 
 GENERATOR_NOTE = (
@@ -142,6 +111,7 @@ FORBIDDEN_TEXT = [
 ]
 
 COMMON_REPLACEMENTS = [
+    ("~/.claude/", "~/.codex/"),
     ("`/", "`"),
     ("CLAUDE.md", "AGENTS.md"),
     ("TODOS.md", "TODO.md"),
@@ -204,12 +174,73 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def read_frontmatter_and_body(path: Path) -> tuple[str, str]:
+def read_frontmatter_and_body(path: Path) -> tuple[dict[str, str], str]:
     text = path.read_text()
     match = re.match(r"^---\n.*?\n---\n(.*)$", text, re.S)
     if not match:
         raise ValueError(f"missing frontmatter in {path}")
-    return text, match.group(1).lstrip("\n")
+    frontmatter_text = text.split("---", 2)[1]
+    return parse_frontmatter(frontmatter_text), match.group(1).lstrip("\n")
+
+
+def format_frontmatter_description(description: str) -> str:
+    body = description.rstrip("\n").splitlines()
+    if not body:
+        return "description: \n"
+
+    return "description: |\n" + "\n".join(f"  {line}" for line in body) + "\n"
+
+
+def parse_frontmatter(frontmatter: str) -> dict[str, str]:
+    meta: dict[str, str] = {}
+    lines = [line.rstrip("\n") for line in frontmatter.splitlines()]
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if ":" not in line:
+            i += 1
+            continue
+
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.lstrip()
+
+        if value in {"|", "|-", "|+", ""}:
+            i += 1
+            block: list[str] = []
+            while i < len(lines) and lines[i].startswith("  "):
+                block.append(lines[i][2:])
+                i += 1
+            meta[key] = "\n".join(block).rstrip()
+            continue
+
+        meta[key] = value
+        i += 1
+
+    return meta
+
+
+def discover_skills(source_dir: Path) -> list[str]:
+    discovered = []
+    for entry in sorted(source_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        if not (entry / "SKILL.md").exists():
+            continue
+        discovered.append(entry.name)
+    return discovered
+
+
+def copy_supporting_files(source_skill_dir: Path, dest_skill_dir: Path) -> None:
+    for item in source_skill_dir.iterdir():
+        if item.name == "SKILL.md":
+            continue
+        target = dest_skill_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, target, dirs_exist_ok=True)
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, target)
 
 
 def apply_replacements(text: str, replacements: list[tuple[str, str]]) -> str:
@@ -252,13 +283,15 @@ def validate_no_forbidden_text(path: Path) -> None:
             raise ValueError(f"forbidden text {forbidden!r} found in {path}")
 
 
-def write_skill(dest_dir: Path, skill: str, body: str) -> None:
+def write_skill(dest_dir: Path, skill: str, body: str, description: str | None = None) -> None:
     target_dir = dest_dir / "skills" / skill
     target_dir.mkdir(parents=True, exist_ok=True)
+    skill_description = description or f"Use the {skill} skill."
+    description_text = format_frontmatter_description(skill_description)
     skill_text = (
         "---\n"
         f"name: {skill}\n"
-        f"description: {DESCRIPTIONS[skill]}\n"
+        f"{description_text}"
         "---\n\n"
         f"{body}"
     )
@@ -291,11 +324,24 @@ def main() -> None:
     clear_generated_skills(dest_dir)
     copy_references(source_dir, dest_dir)
 
-    write_skill(dest_dir, "browse", BROWSE_SKILL)
+    for skill in discover_skills(source_dir):
+        if skill == "browse":
+            write_skill(
+                dest_dir,
+                skill,
+                BROWSE_SKILL,
+                description=SKILL_OVERRIDES["browse"]["description"],
+            )
+            continue
 
-    for skill in [name for name in SKILLS if name != "browse"]:
-        _, body = read_frontmatter_and_body(source_dir / skill / "SKILL.md")
-        write_skill(dest_dir, skill, clean_generic_body(skill, body))
+        frontmatter, body = read_frontmatter_and_body(source_dir / skill / "SKILL.md")
+        write_skill(
+            dest_dir,
+            skill,
+            clean_generic_body(skill, body),
+            description=frontmatter.get("description"),
+        )
+        copy_supporting_files(source_dir / skill, dest_dir / "skills" / skill)
 
 
 if __name__ == "__main__":
