@@ -2,3 +2,10 @@
 __pycache__/
 *.pyc
 .tmp/
+/tmp/
+.gstack/
+node_modules/
+browse/dist/
+*.log
+bun.lock
+*.bun-build
